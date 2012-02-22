@@ -1,5 +1,75 @@
 module ciprad;
 
+version(all){
+    void main(){
+        const(char)[3] ary = ['a', 'b', 'c'];
+        char[3] ary2;
+        ary2 = ary;
+    }
+}
+
+version(none){
+    struct S{}
+    pragma(msg, S.stringof);
+    void main(){}
+}
+
+version(none){
+    unittest{
+        enum dg = {
+            cast(void)__LINE__;
+            /* \0 <= "hoge" */ mixin(generateUnittest(q{
+                auto result = getResult!(parseNone!())(@1);
+                assert(result.match);
+                assert(result.rest == positional(@2, 1, 1));
+            }, "hoge", "hoge"));
+        };
+    }
+
+    string generateUnittest(string file = __FILE__, int line = __LINE__)(string src, string input, string rest){
+        pragma(msg, line);
+        return "";
+    }
+
+    void main(){}
+}
+
+version(none){
+    void main(){
+        mixin(q{mixin("pragma(msg, __LINE__);\npragma(msg, __LINE__);");mixin("pragma(msg, __LINE__);\npragma(msg, __LINE__);");});
+    }
+}
+
+version(none){
+    bool func(int line = __LINE__)(string str, int i){
+        pragma(msg, line);
+        return true;
+    }
+
+    string func2(int line = __LINE__)(string str, int i){
+        pragma(msg, line);
+        return "{}";
+    }
+
+    void main(){
+        mixin(func2(q{
+
+        }, 0));
+
+        static assert(func(q{
+
+        }, 0));
+
+        assert(func(q{
+
+        }, 0));
+        
+        static assert(func(q{
+
+        }, 0));
+    }
+}
+
 version(none){
     import std.stdio;
 
