@@ -1,6 +1,290 @@
 module ciprad;
 
 version(all){
+    pragma(lib, "DerelictUtil.lib");
+    pragma(lib, "DerelictSDL2.lib");
+
+    import derelict.sdl2.sdl;
+    import std.stdio;
+    import std.file: chdir;
+
+    void main(){
+        chdir("slib");
+        DerelictSDL2.load();
+        chdir("..");
+        scope(exit) DerelictSDL2.unload();
+
+        SDL_Init(SDL_INIT_VIDEO);
+        SDL_GL_DOUBLEBUFFER.SDL_GL_SetAttribute(1);
+        scope(exit) SDL_Quit();
+        SDL_Window* window = SDL_CreateWindow("test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_OPENGL);
+        SDL_GLContext context = SDL_GL_CreateContext(window);
+
+        SDL_Event ev;
+        while(true){
+            SDL_PollEvent(&ev);
+            switch(ev.type){
+                case SDL_QUIT:{
+                    return;
+                }
+                default:{
+                }
+            }
+            SDL_GL_SwapWindow(window);
+        }
+    }
+}
+
+version(none){
+    template a(alias b){
+        enum a = 2;
+    }
+    template b(){
+    }
+    void main(){
+        auto i = a!(#line 5
+c!());
+    }
+}
+
+version(none){
+    template t(alias f){
+        enum t = f.stringof;
+    }
+
+    template a(int i){}
+
+    void main(){
+        pragma(msg, t!(a));
+    }
+}
+
+version(none){
+    import std.range;
+    import std.traits;
+    import std.conv;
+
+    struct Result(Range, T){
+        public{
+            bool match;
+            Input!Range rest;
+
+            pure @safe nothrow
+            void opAssign(U)(Result!(Range, U) rhs)if(isAssignable!(T, U)){
+                match = rhs.match;
+                value = rhs.value;
+                rest = rhs.rest;
+                error = rhs.error;
+            }
+        }
+    }
+    struct TestRange(T){
+        static assert(isForwardRange!(typeof(this)));
+        immutable(T)[] source;
+        @property T front(){ return source[0]; }
+        @property void popFront(){ source = source[1..$]; }
+        @property bool empty(){ return source.length == 0; }
+        @property TestRange save(){ return this; }
+    }
+
+    TestRange!(T) testRange(T)(immutable(T)[] source){
+        return TestRange!T(source);
+    }
+    struct Input(Range){
+        static assert(isForwardRange!Range && isSomeChar!(ElementType!Range));
+
+        invariant(){}
+
+        public{
+            Range range;
+
+            //cannot apply some qualifiers due to unclearness of Range
+            Input save(){
+                return this;
+            }
+        }
+    }
+
+    Input!Range makeInput(Range)(Range range){
+        return Input!Range(range);
+    }
+    template parseSpace(){
+        alias string ResultType;
+        Result!(Range, ResultType) parse(Range)(Input!Range input){
+        typeof(return) result;
+            if(!input.range.empty){
+                Unqual!(ElementType!Range) c = input.range.front;
+                if(c == ' ' || c == '\n' || c == '\t' || c == '\r' || c == '\f'){
+                    result.match = true;
+                    input.range.popFront;
+                    result.rest.range = input.range;
+                    return result;
+                }
+            }
+            return result;
+        }
+    }
+
+    template combinateMore(alias parser){
+        Result!(Range, string[]) parse(Range)(Input!Range input){
+            typeof(return) result;
+            Input!Range rest = input;
+            while(true){
+                auto r = rest.save;
+                auto r1 = parser.parse(r);
+                if(r1.match){
+                    rest = r1.rest;
+                }else{
+                    break;
+                }
+            }
+            result.match = true;
+            result.rest = rest;
+            return result;
+        }
+    }
+
+    static assert({
+        auto r = combinateMore!(parseSpace!()).parse(makeInput(testRange("\t"))); 
+        return true;
+    }());
+
+    void main(){}
+}
+
+version(none){
+    struct S{
+        int i;
+        int j;
+        int k;
+        int l;
+    }
+
+    void main(){
+        assert(S(1, 2, 3, 4) == S(1, 2, 3, 4));
+        assert(S(1, 2, 3, 4) != S(1, 2, 4, 8));
+    }
+}
+
+version(none){
+    class S{
+        int i;
+        this(int i){
+            this.i = i;
+        }
+    }
+
+    void f(S s){
+        import std.stdio; writeln(s.i);
+    }
+
+    void main(){
+        auto s = new S(6);
+        s.f();
+    }
+}
+
+version(none){
+    struct Range{
+        string[] str;
+        this(string str){
+            this.str ~= str;
+        }
+        char front(){
+            return str[0][0];
+        }
+        void popFront(){
+            str[0] = str[0][1..$];
+        }
+        typeof(this) save(){
+            return Range(str[0]);
+        }
+    }
+
+    static assert({
+        Range range = Range("hello");
+        auto range2 = range;
+        assert(range.front == 'h');
+        assert(range2.front == 'h');
+        range.popFront;
+        assert(range.front == 'e');
+        assert(range2.front == 'e');
+        return true;
+    }());
+
+    void main(){}
+}
+
+version(none){
+    pragma(msg, __traits(compiles, error));
+    template error(bool b, alias a){
+        static if(b){
+            alias b error;
+        }else{
+            static assert(false);
+        }
+    }
+    template t(a...){
+        enum t = a[0].stringof;
+    }
+
+    pragma(msg, f());
+
+    @property int f(){
+        return 2;
+    }
+
+
+    void main(){}
+}
+
+version(none){
+    void main(){
+        Hoge a;
+        import std.stdio; writeln(a);
+    }
+
+    struct Hoge{
+        int[2] _val;
+        alias _val this;
+    }
+}
+
+version(none){
+    struct None{
+        bool i;
+    }
+    void main(){
+        import std.typecons; import std.stdio; writeln(None.sizeof);
+    }
+}
+
+version(none){
+    void result(T)(T a){}
+
+    void main(){
+        int result = 0;
+        .result!int(result);
+    }
+}
+
+version(none){
+    import std.array;
+    static assert({
+        enum size = 1024 * 1024;
+        pragma(msg, size);
+        char[size] data;
+        char* str = data.ptr;
+        foreach(idx; 0..size/2){
+            str[idx*2..idx*2+2] = ['a', 'b'];
+        }
+        return true;
+    }());
+
+    void main(){}
+}
+
+version(none){
     void main(){
         const(char)[3] ary = ['a', 'b', 'c'];
         char[3] ary2;
