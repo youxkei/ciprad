@@ -1,6 +1,20 @@
 module ciprad;
 
 version(all){
+    template t(T, F){
+        enum t = 0;
+    }
+
+    void main(){
+        auto i = t!(
+#line 5
+A!(),
+#line 7
+B!());
+    }
+}
+
+version(none){
     pragma(lib, "DerelictUtil.lib");
     pragma(lib, "DerelictSDL2.lib");
 
