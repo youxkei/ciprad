@@ -1,5 +1,431 @@
 module ciprad;
 
+/* CTFE‚Å‚«‚éPhobosƒ‚ƒWƒ…[ƒ‹’²¸ */ version(all){
+    /* std.algorithm */ version(all){
+        /* map */ version(none){
+            import std.algorithm:  map;
+            import std.conv:       to;
+            import std.functional: adjoin;
+            import std.range:      equal, chain, recurrence, repeat, isInfinite, iota,
+                                   isRandomAccessRange, AllDummyRanges, propagatesRangeType;
+
+            static assert({
+                alias map!(to!string) stringize;
+                assert(equal(stringize([ 1, 2, 3, 4 ]), [ "1", "2", "3", "4" ]));
+                uint counter;
+                alias map!((a) { return counter++; }) count;
+                assert(equal(count([ 10, 2, 30, 4 ]), [ 0, 1, 2, 3 ]));
+                counter = 0;
+                adjoin!((a) { return counter++; }, (a) { return counter++; })(1);
+                alias map!((a) { return counter++; }, (a) { return counter++; }) countAndSquare;
+
+                int[] arr1 = [ 1, 2, 3, 4 ];
+                const int[] arr1Const = arr1;
+                int[] arr2 = [ 5, 6 ];
+                auto squares = map!("a * a")(arr1Const);
+                assert(equal(squares, [ 1, 4, 9, 16 ][]));
+                assert(equal(map!("a * a")(chain(arr1, arr2)), [ 1, 4, 9, 16, 25, 36 ][]));
+
+                // Test the caching stuff.
+                assert(squares.back == 16);
+                auto squares2 = squares.save;
+                assert(squares2.back == 16);
+
+                assert(squares2.front == 1);
+                squares2.popFront();
+                assert(squares2.front == 4);
+                squares2.popBack();
+                assert(squares2.front == 4);
+                assert(squares2.back == 9);
+
+                assert(equal(map!("a * a")(chain(arr1, arr2)), [ 1, 4, 9, 16, 25, 36 ][]));
+
+                uint i;
+                foreach (e; map!("a", "a * a")(arr1))
+                {
+                    assert(e[0] == ++i);
+                    assert(e[1] == i * i);
+                }
+
+                // Test length.
+                assert(squares.length == 4);
+                assert(map!"a * a"(chain(arr1, arr2)).length == 6);
+
+                // Test indexing.
+                assert(squares[0] == 1);
+                assert(squares[1] == 4);
+                assert(squares[2] == 9);
+                assert(squares[3] == 16);
+
+                // Test slicing.
+                auto squareSlice = squares[1..squares.length - 1];
+                assert(equal(squareSlice, [4, 9][]));
+                assert(squareSlice.back == 9);
+                assert(squareSlice[1] == 9);
+
+                // Test on a forward range to make sure it compiles when all the fancy
+                // stuff is disabled.
+                auto fibsSquares = map!"a * a"(recurrence!("a[n-1] + a[n-2]")(1, 1));
+                assert(fibsSquares.front == 1);
+                fibsSquares.popFront();
+                fibsSquares.popFront();
+                assert(fibsSquares.front == 4);
+                fibsSquares.popFront();
+                assert(fibsSquares.front == 9);
+
+                auto repeatMap = map!"a"(repeat(1));
+                static assert(isInfinite!(typeof(repeatMap)));
+
+                auto intRange = map!"a"([1,2,3]);
+                static assert(isRandomAccessRange!(typeof(intRange)));
+
+                foreach(DummyType; AllDummyRanges)
+                {
+                    DummyType d;
+                    auto m = map!"a * a"(d);
+
+                    static assert(propagatesRangeType!(typeof(m), DummyType));
+                    assert(equal(m, [1,4,9,16,25,36,49,64,81,100]));
+                }
+
+                auto LL = iota(1L, 4L);
+                auto m = map!"a*a"(LL);
+                assert(equal(m, [1L, 4L, 9L]));
+
+                return true;
+            }());
+        }
+
+        /* reduce */ version(none){
+            import std.algorithm:  reduce, min, max;
+            import std.range:      chain, iota;
+            import std.typecons:   tuple;
+
+            static assert({
+                {
+                    int[] a = [ 3, 4 ];
+                    auto r = reduce!("a + b")(0, a);
+                    assert(r == 7);
+                    r = reduce!("a + b")(a);
+                    assert(r == 7);
+                    r = reduce!(min)(a);
+                    assert(r == 3);
+                    double[] b = [ 100 ];
+                    auto r1 = reduce!("a + b")(chain(a, b));
+                    assert(r1 == 107);
+
+                    // two funs
+                    version(none){
+                        auto r2 = reduce!("a + b", "a - b")(tuple(0, 0), a);
+                        assert(r2[0] == 7 && r2[1] == -7);
+                        auto r3 = reduce!("a + b", "a - b")(a);
+                        assert(r3[0] == 7 && r3[1] == -1);
+                    }
+
+                    a = [ 1, 2, 3, 4, 5 ];
+                    // Stringize with commas
+                    string rep = reduce!("a ~ `, ` ~ to!(string)(b)")("", a);
+                    assert(rep[2 .. $] == "1, 2, 3, 4, 5", "["~rep[2 .. $]~"]");
+
+                    // Test the opApply case.
+                    static struct OpApply
+                    {
+                        bool actEmpty;
+
+                        int opApply(int delegate(ref int) dg)
+                        {
+                            int res;
+                            if(actEmpty) return res;
+
+                            foreach(i; 0..100)
+                            {
+                                res = dg(i);
+                                if(res) break;
+                            }
+                            return res;
+                        }
+                    }
+
+                    OpApply oa;
+                    auto hundredSum = reduce!"a + b"(iota(100));
+                    assert(reduce!"a + b"(5, oa) == hundredSum + 5);
+                    version(none){
+                        assert(reduce!"a + b"(oa) == hundredSum);
+                        assert(reduce!("a + b", max)(oa) == tuple(hundredSum, 99));
+                        assert(reduce!("a + b", max)(tuple(5, 0), oa) == tuple(hundredSum + 5, 99));
+                    }
+
+                    // Test for throwing on empty range plus no seed.
+                    try {
+                        reduce!"a + b"([1, 2][0..0]);
+                        assert(0);
+                    } catch(Exception) {}
+
+                    oa.actEmpty = true;
+                    try {
+                        reduce!"a + b"(oa);
+                        assert(0);
+                    } catch(Exception) {}
+                }{
+                    const float a = 0;
+                    const float[] b = [ 1.2, 3, 3.3 ];
+                    float[] c = [ 1.2, 3, 3.3 ];
+                    auto r = reduce!"a + b"(a, b);
+                    r = reduce!"a + b"(a, c);
+                }
+
+                return true;
+            }());
+        }
+
+        /* fill */ version(none){
+            import std.algorithm:  fill;
+            import std.conv:       text;
+            static assert({
+                version(none){
+                    int[] a = [ 1, 2, 3 ];
+                    fill(a, 6);
+                    assert(a == [ 6, 6, 6 ], text(a));
+                    void fun0()
+                    {
+                        foreach (i; 0 .. 1000)
+                        {
+                            foreach (ref e; a) e = 6;
+                        }
+                    }
+                    void fun1() { foreach (i; 0 .. 1000) fill(a, 6); }
+                }{
+                    int[] a = [ 1, 2, 3, 4, 5 ];
+                    int[] b = [1, 2];
+                    fill(a, b);
+                    assert(a == [ 1, 2, 1, 2, 1 ]);
+                }
+
+                return true;
+            }());
+        }
+
+        /* filter */ version(none){
+            import std.algorithm:  filter, AllDummyRanges, map;
+            import std.functional: compose, pipe;
+            import std.range:      isForwardRange, equal, repeat, isInfinite, chain;
+            static assert({
+                {
+                    int[] a = [ 3, 4, 2 ];
+                    auto r = filter!("a > 3")(a);
+                    static assert(isForwardRange!(typeof(r)));
+                    assert(equal(r, [ 4 ][]));
+
+                    a = [ 1, 22, 3, 42, 5 ];
+                    auto under10 = filter!("a < 10")(a);
+                    assert(equal(under10, [1, 3, 5][]));
+                    static assert(isForwardRange!(typeof(under10)));
+                    under10.front() = 4;
+                    assert(equal(under10, [4, 3, 5][]));
+                    under10.front() = 40;
+                    assert(equal(under10, [40, 3, 5][]));
+                    under10.front() = 1;
+
+                    auto infinite = filter!"a > 2"(repeat(3));
+                    static assert(isInfinite!(typeof(infinite)));
+                    static assert(isForwardRange!(typeof(infinite)));
+
+                    foreach(DummyType; AllDummyRanges) {
+                        DummyType d;
+                        auto f = filter!"a & 1"(d);
+                        assert(equal(f, [1,3,5,7,9]));
+
+                        static if (isForwardRange!DummyType) {
+                            static assert(isForwardRange!(typeof(f)));
+                        }
+                    }
+
+                    // With delegates
+                    int x = 10;
+                    int overX(int a) { return a > x; }
+                    typeof(filter!overX(a)) getFilter()
+                    {
+                        return filter!overX(a);
+                    }
+                    auto r1 = getFilter();
+                    assert(equal(r1, [22, 42]));
+
+                    // With chain
+                    auto nums = [0,1,2,3,4];
+                    assert(equal(filter!overX(chain(a, nums)), [22, 42]));
+
+                    // With copying of inner struct Filter to Map
+                    auto arr = [1,2,3,4,5];
+                    auto m = map!"a + 1"(filter!"a < 4"(arr));
+                }{
+                    int[] a = [ 3, 4 ];
+                    const aConst = a;
+                    auto r = filter!("a > 3")(aConst);
+                    assert(equal(r, [ 4 ][]));
+
+                    a = [ 1, 22, 3, 42, 5 ];
+                    auto under10 = filter!("a < 10")(a);
+                    assert(equal(under10, [1, 3, 5][]));
+                    assert(equal(under10.save, [1, 3, 5][]));
+                    assert(equal(under10.save, under10));
+
+                    // With copying of inner struct Filter to Map
+                    auto arr = [1,2,3,4,5];
+                    auto m = map!"a + 1"(filter!"a < 4"(arr));
+                }{
+                    assert(equal(compose!(map!"2 * a", filter!"a & 1")([1,2,3,4,5]),
+                                    [2,6,10]));
+                    assert(equal(pipe!(filter!"a & 1", map!"2 * a")([1,2,3,4,5]),
+                            [2,6,10]));
+                }{
+                    int x = 10;
+                    int underX(int a) { return a < x; }
+                    const(int)[] list = [ 1, 2, 10, 11, 3, 4 ];
+                    assert(equal(filter!underX(list), [ 1, 2, 3, 4 ]));
+                }
+                return true;
+            }());
+        }
+
+        /* move */ version(none){
+            import std.algorithm:  move, hasElaborateDestructor, hasElaborateCopyConstructor;
+            static assert({
+                Object obj1 = new Object;
+                Object obj2;
+                move(obj1, obj2);
+                assert(obj1 is obj2);
+
+                static struct S1 { int a = 1, b = 2; }
+                S1 s11 = { 10, 11 };
+                S1 s12;
+                version(none){
+                    move(s11, s12);
+                    assert(s11.a == 10 && s11.b == 11 && s12.a == 10 && s12.b == 11);
+                }
+
+                static struct S2 { int a = 1; int * b; }
+                S2 s21 = { 10, null };
+                s21.b = new int;
+                S2 s22;
+                move(s21, s22);
+                assert(s21 == s22);
+
+                // Issue 5661 test(1)
+                static struct S3
+                {
+                    static struct X { int n = 0; ~this(){n = 0;} }
+                    X x;
+                }
+                static assert(hasElaborateDestructor!S3);
+                S3 s31, s32;
+                s31.x.n = 1;
+                move(s31, s32);
+                assert(s31.x.n == 0);
+                assert(s32.x.n == 1);
+
+                // Issue 5661 test(2)
+                static struct S4
+                {
+                    static struct X { int n = 0; this(this){n = 0;} }
+                    X x;
+                }
+                static assert(hasElaborateCopyConstructor!S4);
+                S4 s41, s42;
+                s41.x.n = 1;
+                move(s41, s42);
+                assert(s41.x.n == 0);
+                assert(s42.x.n == 1);
+            }());
+        }
+
+        /* moveAll, moveSome */ version(all){
+            import std.algorithm:  moveAll, moveSome;
+            import std.conv:       to;
+            static assert({
+                {
+                    int[] a = [ 1, 2, 3 ];
+                    int[] b = [0, 0, 0, 0, 0];
+                    moveAll(a, b);
+                    //assert(a == b[0..3]);
+                }{
+                    int[] a = [1, 2, 3, 4, 5];
+                    int[] b = [0, 0, 0];
+                    moveSome(a, b);
+                    //assert(a[0..3] == b);
+                }
+                return true;
+            }());
+        }
+
+        /* swap */ version(all){
+            import std.algorithm:  swap;
+            static assert({
+                int a = 42, b = 34;
+                swap(a, b);
+                assert(a == 34 && b == 42);
+
+                static struct S { int x; char c; int[] y; }
+                S s1 = { 0, 'z', [ 1, 2 ] };
+                S s2 = { 42, 'a', [ 4, 6 ] };
+                //writeln(s2.tupleof.stringof);
+                swap(s1, s2);
+                assert(s1.x == 42);
+                assert(s1.c == 'a');
+                assert(s1.y == [ 4, 6 ]);
+
+                assert(s2.x == 0);
+                assert(s2.c == 'z');
+                assert(s2.y == [ 1, 2 ]);
+
+                immutable int imm1, imm2;
+                static assert(!__traits(compiles, swap(imm1, imm2)));
+
+                static struct NoCopy
+                {
+                    this(this){ assert(0); }
+                    int n;
+                    string s;
+                }
+                NoCopy nc1, nc2;
+                nc1.n = 127; nc1.s = "abc";
+                nc2.n = 513; nc2.s = "uvwxyz";
+                swap(nc1, nc2);
+                version(none){
+                assert(nc1.n == 513 && nc1.s == "uvwxyz");
+                assert(nc2.n == 127 && nc2.s == "abc");
+                swap(nc1, nc1);
+                swap(nc2, nc2);
+                assert(nc1.n == 513 && nc1.s == "uvwxyz");
+                assert(nc2.n == 127 && nc2.s == "abc");
+                }
+
+                version(none){
+                static struct NoCopyHolder
+                {
+                    NoCopy noCopy;
+                }
+                NoCopyHolder h1, h2;
+                h1.noCopy.n = 31; h1.noCopy.s = "abc";
+                h2.noCopy.n = 65; h2.noCopy.s = null;
+                swap(h1, h2);
+                assert(h1.noCopy.n == 65 && h1.noCopy.s == null);
+                assert(h2.noCopy.n == 31 && h2.noCopy.s == "abc");
+                swap(h1, h1);
+                swap(h2, h2);
+                assert(h1.noCopy.n == 65 && h1.noCopy.s == null);
+                assert(h2.noCopy.n == 31 && h2.noCopy.s == "abc");
+
+                const NoCopy const1, const2;
+                static assert(!__traits(compiles, swap(const1, const2)));
+                }
+                return true;
+            }());
+        }
+    }
+
+    void main(){}
+}
+
 version(all){
     template t(T, F){
         enum t = 0;
