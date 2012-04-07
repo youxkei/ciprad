@@ -1,6 +1,20 @@
 module ciprad;
 
-/* std.array.joinがCTFEableかどうか検証 */ version(all){
+/* 引数のauto refが動くかどうか検証 */ version(all){
+    alias Object[size_t][string] memo_t;
+    void func()(auto ref memo_t aa){
+        aa["hoge"][0] = new Object;
+    }
+
+    void main(){
+        memo_t aa;
+        func(aa);
+        import std.stdio; writeln(aa);
+        func(null);
+    }
+}
+
+/* std.array.joinがCTFEableかどうか検証 */ version(none){
     import std.array: join;
     pragma(msg, join(["hello", "world"], " "));
     void main(){}
