@@ -1,6 +1,34 @@
 module ciprad;
 
-/* CTFE�ł���Phobos���W���[������ */ version(all){
+/* std.array.joinがCTFEableかどうか検証 */ version(all){
+    import std.array: join;
+    pragma(msg, join(["hello", "world"], " "));
+    void main(){}
+}
+/* T!typeof(0) が出来るかどうか検証 */ version(none){
+    template temp(T){
+        alias T temp;
+    }
+
+    temp!(typeof(0)) i;
+    void main(){}
+}
+
+/* コピーコンストラクタをCTFEするとクラッシュするバグの検証 */ version(none){
+    struct S{
+        int i;
+        this(this){}
+    }
+    static assert({
+        S s1;
+        S s2;
+        s1 = s2;
+        return true;
+    }());
+    void main(){}
+}
+
+/* CTFEできるPhobosモジュール調査 */ version(none){
     /* std.algorithm */ version(all){
         /* map */ version(none){
             import std.algorithm:  map;
@@ -338,7 +366,7 @@ module ciprad;
             }());
         }
 
-        /* moveAll, moveSome */ version(all){
+        /* moveAll, moveSome */ version(none){
             import std.algorithm:  moveAll, moveSome;
             import std.conv:       to;
             static assert({
@@ -357,7 +385,7 @@ module ciprad;
             }());
         }
 
-        /* swap */ version(all){
+        /* swap */ version(none){
             import std.algorithm:  swap;
             static assert({
                 int a = 42, b = 34;
@@ -367,7 +395,6 @@ module ciprad;
                 static struct S { int x; char c; int[] y; }
                 S s1 = { 0, 'z', [ 1, 2 ] };
                 S s2 = { 42, 'a', [ 4, 6 ] };
-                //writeln(s2.tupleof.stringof);
                 swap(s1, s2);
                 assert(s1.x == 42);
                 assert(s1.c == 'a');
@@ -389,8 +416,8 @@ module ciprad;
                 NoCopy nc1, nc2;
                 nc1.n = 127; nc1.s = "abc";
                 nc2.n = 513; nc2.s = "uvwxyz";
-                swap(nc1, nc2);
                 version(none){
+                swap(nc1, nc2);
                 assert(nc1.n == 513 && nc1.s == "uvwxyz");
                 assert(nc2.n == 127 && nc2.s == "abc");
                 swap(nc1, nc1);
@@ -421,12 +448,83 @@ module ciprad;
                 return true;
             }());
         }
+
+        /* splitter */ version(all){
+            import std.algorithm:  splitter;
+            import std.range:      equal, isForwardRange, retro, array, iota, AllDummyRanges, isRandomAccessRange, isBidirectionalRange;
+            static assert({
+                assert(equal(splitter("hello  world", ' '), [ "hello", "", "world" ]));
+                int[] a = [ 1, 2, 0, 0, 3, 0, 4, 5, 0 ];
+                int[][] w = [ [1, 2], [], [3], [4, 5], [] ];
+                static assert(isForwardRange!(typeof(splitter(a, 0))));
+
+                // foreach (x; splitter(a, 0)) {
+                //     writeln("[", x, "]");
+                // }
+                assert(equal(splitter(a, 0), w));
+                a = null;
+                assert(equal(splitter(a, 0), [ (int[]).init ][]));
+                a = [ 0 ];
+                assert(equal(splitter(a, 0), [ (int[]).init, (int[]).init ][]));
+                a = [ 0, 1 ];
+                assert(equal(splitter(a, 0), [ [], [1] ][]));
+
+                // Thoroughly exercise the bidirectional stuff.
+                auto str = "abc abcd abcde ab abcdefg abcdefghij ab ac ar an at ada";
+                assert(equal(
+                    retro(splitter(str, 'a')),
+                    retro(array(splitter(str, 'a')))
+                ));
+
+                // Test interleaving front and back.
+                auto split = splitter(str, 'a');
+                assert(split.front == "");
+                assert(split.back == "");
+                split.popBack();
+                assert(split.back == "d");
+                split.popFront();
+                assert(split.front == "bc ");
+                assert(split.back == "d");
+                split.popFront();
+                split.popBack();
+                assert(split.back == "t ");
+                split.popBack();
+                split.popBack();
+                split.popFront();
+                split.popFront();
+                assert(split.front == "b ");
+                assert(split.back == "r ");
+
+                foreach(DummyType; AllDummyRanges) {  // Bug 4408
+                    static if(isRandomAccessRange!DummyType) {
+                        static assert(isBidirectionalRange!DummyType);
+                        DummyType d;
+                        auto s = splitter(d, 5);
+                        assert(equal(s.front, [1,2,3,4]));
+                        assert(equal(s.back, [6,7,8,9,10]));
+
+
+                        auto s2 = splitter(d, [4, 5]);
+                        assert(equal(s2.front, [1,2,3]));
+                        assert(equal(s2.back, [6,7,8,9,10]));
+                    }
+                }
+                auto L = retro(iota(1L, 10L));
+                auto s = splitter(L, 5L);
+                assert(equal(s.front, [9L, 8L, 7L, 6L]));
+                s.popFront();
+                assert(equal(s.front, [4L, 3L, 2L, 1L]));
+                s.popFront();
+                assert(s.empty);
+                return true;
+            }());
+        }
     }
 
     void main(){}
 }
 
-version(all){
+version(none){
     template t(T, F){
         enum t = 0;
     }
