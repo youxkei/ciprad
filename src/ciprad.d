@@ -1,6 +1,29 @@
 module ciprad;
 
-/* 引数のauto refが動くかどうか検証 */ version(all){
+/+ 構造体内のaliasはstaticを付けなくても参照可能かどうか検証 +/ version(all){
+    struct S{
+        alias int i;
+    }
+    S.i i;
+    void main(){}
+}
+
+/+ AAがCTFEで参照型かどうか検証 +/ version(none){
+    void func()(auto ref int[int] aa){
+        aa[0] = 2;
+    }
+
+    static assert({
+        int[int] aa;
+        func(aa);
+        assert(aa[0] == 2);
+        return true;
+    }());
+
+    void main(){}
+}
+
+/* 引数のauto refが動くかどうか検証 */ version(none){
     alias Object[size_t][string] memo_t;
     void func()(auto ref memo_t aa){
         aa["hoge"][0] = new Object;
