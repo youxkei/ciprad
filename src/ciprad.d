@@ -1,6 +1,16 @@
 module ciprad;
 
-/* std.array.joinがCTFEableかどうか検証 */ version(all){
+/* void[] が ubyte[] に暗黙キャストされるかどうか検証 */ version(all){
+    void test(ubyte[] a){
+    }
+
+    void main(){
+        void[] a;
+        test(a);
+    }
+}
+
+/* std.array.joinがCTFEableかどうか検証 */ version(none){
     import std.array: join;
     pragma(msg, join(["hello", "world"], " "));
     void main(){}
