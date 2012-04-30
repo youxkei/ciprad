@@ -1,6 +1,30 @@
 module ciprad;
 
-/* void[] が ubyte[] に暗黙キャストされるかどうか検証 */ version(all){
+/+ mixin templateが実際に呼ばれた場所で展開されるかどうか検証 +/ version(none){
+    mixin template hoge(size_t line = __LINE__){
+        pragma(msg, line);
+        void f(){
+            g();
+        }
+    }
+
+    struct S{
+        mixin hoge;
+        void g(){}
+    }
+
+    void main(){}
+}
+
+/+ #lineのが動くかどうか検証 +/ version(all){
+    template temp(alias a, alias b, alias c){alias int temp;} #line 1
+    temp!( #line 10
+        a!(1), #line 100
+        b!(2), #line 1000
+        c!(3)) intv;
+}
+
+/* void[] が ubyte[] に暗黙キャストされるかどうか検証 */ version(none){
     void test(ubyte[] a){
     }
 
@@ -10,7 +34,7 @@ module ciprad;
     }
 }
 
-/+ 構造体内のaliasはstaticを付けなくても参照可能かどうか検証 +/ version(all){
+/+ 構造体内のaliasはstaticを付けなくても参照可能かどうか検証 +/ version(none){
     struct S{
         alias int i;
     }
